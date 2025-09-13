@@ -1,0 +1,3 @@
+Title: Metformin and Cardiovascular Outcomes in Type 2 Diabetes
+
+Abstract: Metformin is widely prescribed as a first-line treatment for type 2 diabetes mellitus (T2DM). Recent studies suggest its benefits extend beyond glycemic control. We conducted a meta-analysis of randomized controlled trials evaluating metformin’s impact on cardiovascular outcomes. Across 12 trials involving 14,000 patients, metformin use was associated with a 22% reduction in major adverse cardiovascular events (MACE). These findings highlight metformin’s dual role in improving glycemic parameters and reducing cardiovascular risk. Further mechanistic studies are warranted to understand the cardioprotective effects.

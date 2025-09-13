@@ -1,0 +1,11 @@
+# Exclude Python cache and virtualenv
+__pycache__/
+.venv/
+
+# Exclude local artifacts
+*.pkl
+*.log
+
+# Exclude local Chroma persistence (the container will build its own)
+chroma_db/
+

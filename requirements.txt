@@ -1,0 +1,38 @@
+# Core LangChain stack
+langchain==0.2.16
+langchain-community==0.2.10
+langchain-text-splitters==0.2.2
+langchain-chroma==0.1.3
+
+# Vector DB (managed via langchain-chroma)
+# chromadb is installed transitively by langchain-chroma with a compatible version
+
+# Embeddings
+sentence-transformers==2.7.0
+torch==2.4.1
+sentencepiece==0.2.0
+
+# LLMs via Hugging Face Transformers
+transformers==4.44.2
+accelerate==0.34.2
+
+# Quantization / efficient loading
+# bitsandbytes has limited Windows support; skip on Windows
+bitsandbytes==0.43.3; platform_system != "Windows"
+# Optional CPU-only alternative on Windows
+llama-cpp-python==0.2.90; platform_system == "Windows"
+
+# Web UI
+# Prefer latest pin for Python 3.10+, fallback for 3.9.7
+streamlit==1.37.1; python_version >= "3.10" and python_full_version != "3.9.7"
+streamlit==1.12.0; python_version < "3.10" or python_full_version == "3.9.7"
+
+# Optional API (not required for Streamlit)
+fastapi==0.112.0
+uvicorn[standard]==0.30.3
+
+# Utilities
+pypdf==4.3.1
+python-dotenv==1.0.1
+einops==0.8.0
+huggingface-hub==0.24.6
