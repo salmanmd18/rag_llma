@@ -31,6 +31,7 @@ except Exception:  # pragma: no cover
     from langchain_community.llms import HuggingFacePipeline  # type: ignore
 
 from langchain.chains import RetrievalQA
+from chromadb.config import Settings
 
 
 DEFAULT_DB_PATH = "chroma_db"
@@ -48,6 +49,9 @@ def load_pipeline():
         collection_name=DEFAULT_COLLECTION,
         persist_directory=DEFAULT_DB_PATH,
         embedding_function=embedding_fn,
+        client_settings=Settings(
+            chroma_db_impl="duckdb+parquet", anonymized_telemetry=False
+        ),
     )
 
     # Hugging Face model (Flan‑T5)

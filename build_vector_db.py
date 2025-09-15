@@ -21,6 +21,7 @@ from typing import List
 
 from sentence_transformers import SentenceTransformer
 import chromadb
+from chromadb.config import Settings
 import shutil
 
 
@@ -91,7 +92,10 @@ def main() -> None:
         print(f"Resetting DB path: {args.db_path}")
         shutil.rmtree(args.db_path, ignore_errors=True)
     print(f"Initializing persistent ChromaDB at: {args.db_path}")
-    client = chromadb.PersistentClient(path=args.db_path)
+    client = chromadb.PersistentClient(
+        path=args.db_path,
+        settings=Settings(chroma_db_impl="duckdb+parquet", anonymized_telemetry=False),
+    )
     # Unify with ingest.py defaults: use 'pubmed_abstracts' collection by default
     if args.collection == "pubmed_docs":
         args.collection = "pubmed_abstracts"

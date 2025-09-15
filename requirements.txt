@@ -36,3 +36,6 @@ pypdf==4.3.1
 python-dotenv==1.0.1
 einops==0.8.0
 huggingface-hub==0.24.6
+
+# Storage backend for Chroma (Streamlit Cloud compatibility)
+duckdb==0.10.2

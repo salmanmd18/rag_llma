@@ -30,11 +30,18 @@ except Exception:  # pragma: no cover
         "Install 'langchain-huggingface' and switch to the new import to silence this."
     )
 from langchain_chroma import Chroma
+from chromadb.config import Settings
 import shutil
 
 
 DEFAULT_DATA_DIR = Path("data")
 DEFAULT_PERSIST_DIR = Path("chroma_db")
+
+# Force Chroma to use DuckDB+Parquet (works on environments with old sqlite)
+CHROMA_SETTINGS = Settings(
+    chroma_db_impl="duckdb+parquet",
+    anonymized_telemetry=False,
+)
 
 
 def find_source_files(data_dir: Path) -> List[Path]:
@@ -100,6 +107,7 @@ def persist_to_chroma(
         collection_name=collection_name,
         embedding_function=embeddings,  # alias: embedding
         persist_directory=str(persist_dir),
+        client_settings=CHROMA_SETTINGS,
     )
 
     # Build stable IDs per chunk: source::start_index
