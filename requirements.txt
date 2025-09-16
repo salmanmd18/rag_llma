@@ -22,12 +22,7 @@ bitsandbytes==0.43.3; platform_system != "Windows"
 # Optional CPU-only alternative on Windows
 llama-cpp-python==0.2.90; platform_system == "Windows"
 
-# Web UI
-# Prefer latest pin for Python 3.10+, fallback for 3.9.7
-streamlit==1.37.1; python_version >= "3.10" and python_full_version != "3.9.7"
-streamlit==1.12.0; python_version < "3.10" or python_full_version == "3.9.7"
-
-# Optional API (not required for Streamlit)
+# API backend
 fastapi==0.112.0
 uvicorn[standard]==0.30.3
 
