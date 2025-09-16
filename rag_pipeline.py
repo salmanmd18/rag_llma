@@ -41,7 +41,6 @@ except Exception:  # pragma: no cover
     from langchain_community.llms import HuggingFacePipeline  # type: ignore
 
 from langchain.chains import RetrievalQA
-from chromadb.config import Settings
 
 
 DEFAULT_DB_PATH = "chroma_db"
@@ -66,9 +65,6 @@ def build_vectorstore(
         collection_name=collection,
         persist_directory=db_path,
         embedding_function=embedding_fn,
-        client_settings=Settings(
-            chroma_db_impl="duckdb+parquet", anonymized_telemetry=False
-        ),
     )
 
 
