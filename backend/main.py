@@ -27,7 +27,10 @@ from sentence_transformers import SentenceTransformer
 import chromadb
 from langchain.chains import RetrievalQA
 from langchain_core.documents import Document
-from langchain_core.language_models import BaseLanguageModel
+from langchain_core.language_models import LLM
+from langchain_core.retrievers import BaseRetriever
+from typing import Any
+from pydantic import PrivateAttr
 
 
 DEFAULT_DB_PATH = "chroma_db"
@@ -41,17 +44,25 @@ def _device_for_pipeline() -> int:
     return 0 if torch.cuda.is_available() else -1
 
 
-class SimpleChromaRetriever:
-    """Minimal retriever that queries Chroma directly via embeddings."""
+class SimpleChromaRetriever(BaseRetriever):
+    """Retriever that queries Chroma directly via SentenceTransformer embeddings."""
+
+    _collection: Any = PrivateAttr()
+    _embedder: SentenceTransformer = PrivateAttr()
+    k: int = 4
 
     def __init__(self, collection: chromadb.api.models.Collection.Collection, embedder: SentenceTransformer, k: int = 4):
-        self.collection = collection
-        self.embedder = embedder
-        self.k = k
+        super().__init__(k=k)
+        object.__setattr__(self, "_collection", collection)
+        object.__setattr__(self, "_embedder", embedder)
 
-    def get_relevant_documents(self, query: str):
-        vec = self.embedder.encode([query]).tolist()
-        res = self.collection.query(query_embeddings=vec, n_results=self.k, include=["documents", "metadatas"])
+    def _get_relevant_documents(self, query: str, run_manager=None):
+        vec = self._embedder.encode([query]).tolist()
+        res = self._collection.query(
+            query_embeddings=vec,
+            n_results=self.k,
+            include=["documents", "metadatas"],
+        )
         docs = []
         for doc_text, meta in zip(res.get("documents", [[]])[0], res.get("metadatas", [[]])[0]):
             docs.append(Document(page_content=doc_text, metadata=meta or {}))
@@ -75,15 +86,16 @@ def _build_rag_chain() -> RetrievalQA:
         max_new_tokens=256,
         temperature=0.2,
     )
-    # Wrap pipeline in a lightweight shim that satisfies LangChain's LLM interface
-    # Using Runnable or BaseLanguageModel wrappers would be ideal, but a simple adapter works.
-    class PipelineLLM(BaseLanguageModel):
+    # Wrap pipeline in a lightweight shim compatible with LangChain's LLM interface
+    class PipelineLLM(LLM):
+        _pipe: Any = PrivateAttr()
+
         def __init__(self, pipe):
             super().__init__()
-            self.pipe = pipe
+            object.__setattr__(self, "_pipe", pipe)
 
         def _call(self, prompt: str, stop=None, run_manager=None):
-            out = self.pipe(prompt)[0]["generated_text"]
+            out = self._pipe(prompt)[0]["generated_text"]
             return out
 
         @property
