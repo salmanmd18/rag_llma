@@ -1,0 +1,8 @@
+fastapi==0.111.0
+uvicorn==0.30.0
+langchain==0.2.11
+chromadb==0.4.24
+sentence-transformers==2.2.2
+transformers==4.43.3
+accelerate==0.31.0
+torch==2.1.2

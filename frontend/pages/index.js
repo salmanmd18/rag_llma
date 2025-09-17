@@ -1,7 +1,5 @@
 import { useState } from "react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
-
 export default function Home() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
@@ -15,7 +13,7 @@ export default function Home() {
     if (!q) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/ask`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"}/ask`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: q }),
@@ -67,10 +65,9 @@ export default function Home() {
           </div>
         )}
         <div className="mt-6 text-xs text-gray-500">
-          Backend: {API_BASE}
+          Backend: {process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000"}
         </div>
       </div>
     </main>
   );
 }
-

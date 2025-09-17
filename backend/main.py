@@ -15,6 +15,7 @@ Loads on startup:
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import os
 from typing import Optional
 
 import torch
@@ -22,26 +23,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, pipeline
-
-# Prefer modern provider packages with graceful fallbacks
-try:  # Embeddings
-    from langchain_huggingface import HuggingFaceEmbeddings  # type: ignore
-except Exception:  # pragma: no cover
-    from langchain_community.embeddings import (  # type: ignore
-        HuggingFaceEmbeddings,  # deprecated location
-    )
-
-try:  # Chroma vector store
-    from langchain_chroma import Chroma  # type: ignore
-except Exception:  # pragma: no cover
-    from langchain_community.vectorstores import Chroma  # type: ignore
-
-try:  # HF pipeline LLM wrapper
-    from langchain_huggingface import HuggingFacePipeline  # type: ignore
-except Exception:  # pragma: no cover
-    from langchain_community.llms import HuggingFacePipeline  # type: ignore
-
+from sentence_transformers import SentenceTransformer
+import chromadb
 from langchain.chains import RetrievalQA
+from langchain_core.documents import Document
+from langchain_core.language_models import BaseLanguageModel
 
 
 DEFAULT_DB_PATH = "chroma_db"
@@ -55,14 +41,28 @@ def _device_for_pipeline() -> int:
     return 0 if torch.cuda.is_available() else -1
 
 
+class SimpleChromaRetriever:
+    """Minimal retriever that queries Chroma directly via embeddings."""
+
+    def __init__(self, collection: chromadb.api.models.Collection.Collection, embedder: SentenceTransformer, k: int = 4):
+        self.collection = collection
+        self.embedder = embedder
+        self.k = k
+
+    def get_relevant_documents(self, query: str):
+        vec = self.embedder.encode([query]).tolist()
+        res = self.collection.query(query_embeddings=vec, n_results=self.k, include=["documents", "metadatas"])
+        docs = []
+        for doc_text, meta in zip(res.get("documents", [[]])[0], res.get("metadatas", [[]])[0]):
+            docs.append(Document(page_content=doc_text, metadata=meta or {}))
+        return docs
+
+
 def _build_rag_chain() -> RetrievalQA:
-    # Embeddings + Vector Store
-    embedding_fn = HuggingFaceEmbeddings(model_name=DEFAULT_EMBEDDING_MODEL)
-    vectordb = Chroma(
-        collection_name=DEFAULT_COLLECTION,
-        persist_directory=DEFAULT_DB_PATH,
-        embedding_function=embedding_fn,
-    )
+    # Embedding model + Chroma client/collection
+    embedder = SentenceTransformer(DEFAULT_EMBEDDING_MODEL)
+    client = chromadb.PersistentClient(path=DEFAULT_DB_PATH)
+    collection = client.get_or_create_collection(name=DEFAULT_COLLECTION)
 
     # LLM pipeline (Flan‑T5)
     tokenizer = AutoTokenizer.from_pretrained(DEFAULT_LLM_MODEL)
@@ -75,14 +75,26 @@ def _build_rag_chain() -> RetrievalQA:
         max_new_tokens=256,
         temperature=0.2,
     )
-    llm = HuggingFacePipeline(pipeline=generate_pipe)
+    # Wrap pipeline in a lightweight shim that satisfies LangChain's LLM interface
+    # Using Runnable or BaseLanguageModel wrappers would be ideal, but a simple adapter works.
+    class PipelineLLM(BaseLanguageModel):
+        def __init__(self, pipe):
+            super().__init__()
+            self.pipe = pipe
+
+        def _call(self, prompt: str, stop=None, run_manager=None):
+            out = self.pipe(prompt)[0]["generated_text"]
+            return out
+
+        @property
+        def _llm_type(self) -> str:
+            return "hf_pipeline"
+
+    llm = PipelineLLM(generate_pipe)
 
     # RetrievalQA chain — 'stuff' inserts chunks directly into the prompt
-    qa_chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        chain_type="stuff",
-        retriever=vectordb.as_retriever(search_kwargs={"k": 4}),
-    )
+    retriever = SimpleChromaRetriever(collection, embedder, k=4)
+    qa_chain = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=retriever)
     return qa_chain
 
 
@@ -96,10 +108,17 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Healthcare RAG Backend", lifespan=lifespan)
 
-# Allow local Next.js dev server
+# CORS: read allowed origins from env (comma‑separated). Defaults include localhost.
+_cors_env = os.getenv(
+    "BACKEND_CORS_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000",
+)
+_origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
+allow_all = "*" in _origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["*"] if allow_all else _origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
