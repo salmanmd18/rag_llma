@@ -6,7 +6,7 @@ Exposes:
 - POST /ask       → {"question": str} → {"answer": str}
 
 Loads on startup:
-- Embeddings: sentence-transformers/all-MiniLM-L6-v2
+- Embeddings: sentence-transformers/paraphrase-MiniLM-L3-v2
 - Vector store: Chroma persistent DB from ./chroma_db (collection: pubmed_abstracts)
 - LLM: google/flan-t5-small via Hugging Face pipeline (override with LLM_MODEL_NAME env var)
 - Chain: LangChain RetrievalQA (chain_type="stuff")
@@ -35,9 +35,11 @@ from pydantic import PrivateAttr
 
 DEFAULT_DB_PATH = "chroma_db"
 DEFAULT_COLLECTION = "pubmed_abstracts"
-DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+DEFAULT_EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL_NAME", "sentence-transformers/paraphrase-MiniLM-L3-v2")
 DEFAULT_LLM_MODEL = os.getenv("LLM_MODEL_NAME", "google/flan-t5-small")
 
+TORCH_NUM_THREADS = int(os.getenv("TORCH_NUM_THREADS", "1"))
+torch.set_num_threads(TORCH_NUM_THREADS)
 
 def _device_for_pipeline() -> int:
     """Return pipeline device id: 0 for CUDA, -1 for CPU."""
@@ -71,13 +73,20 @@ class SimpleChromaRetriever(BaseRetriever):
 
 def _build_rag_chain() -> RetrievalQA:
     # Embedding model + Chroma client/collection
-    embedder = SentenceTransformer(DEFAULT_EMBEDDING_MODEL)
+    embedder = SentenceTransformer(DEFAULT_EMBEDDING_MODEL, device="cuda" if torch.cuda.is_available() else "cpu")
     client = chromadb.PersistentClient(path=DEFAULT_DB_PATH)
     collection = client.get_or_create_collection(name=DEFAULT_COLLECTION)
 
-    # LLM pipeline (Flan‑T5)
+    # LLM pipeline (Flan-T5)
     tokenizer = AutoTokenizer.from_pretrained(DEFAULT_LLM_MODEL)
-    model = AutoModelForSeq2SeqLM.from_pretrained(DEFAULT_LLM_MODEL)
+    model_kwargs: dict[str, object] = {"low_cpu_mem_usage": True}
+    if torch.cuda.is_available():
+        model_kwargs["torch_dtype"] = torch.float16
+    model = AutoModelForSeq2SeqLM.from_pretrained(DEFAULT_LLM_MODEL, **model_kwargs)
+    if not torch.cuda.is_available():
+        model = torch.quantization.quantize_dynamic(
+            model, {torch.nn.Linear}, dtype=torch.qint8
+        )
     generate_pipe = pipeline(
         task="text2text-generation",
         model=model,
@@ -104,10 +113,11 @@ def _build_rag_chain() -> RetrievalQA:
 
     llm = PipelineLLM(generate_pipe)
 
-    # RetrievalQA chain — 'stuff' inserts chunks directly into the prompt
+    # RetrievalQA chain - 'stuff' inserts chunks directly into the prompt
     retriever = SimpleChromaRetriever(collection, embedder, k=4)
     qa_chain = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=retriever)
     return qa_chain
+
 
 
 @asynccontextmanager
@@ -161,4 +171,7 @@ async def ask(req: AskRequest):
 
 
 # For local run: uvicorn backend.main:app --reload --port 8000
+
+
+
 
