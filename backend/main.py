@@ -8,7 +8,7 @@ Exposes:
 Loads on startup:
 - Embeddings: sentence-transformers/all-MiniLM-L6-v2
 - Vector store: Chroma persistent DB from ./chroma_db (collection: pubmed_abstracts)
-- LLM: google/flan-t5-base via Hugging Face pipeline
+- LLM: google/flan-t5-small via Hugging Face pipeline (override with LLM_MODEL_NAME env var)
 - Chain: LangChain RetrievalQA (chain_type="stuff")
 """
 
@@ -36,7 +36,7 @@ from pydantic import PrivateAttr
 DEFAULT_DB_PATH = "chroma_db"
 DEFAULT_COLLECTION = "pubmed_abstracts"
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-DEFAULT_LLM_MODEL = "google/flan-t5-base"
+DEFAULT_LLM_MODEL = os.getenv("LLM_MODEL_NAME", "google/flan-t5-small")
 
 
 def _device_for_pipeline() -> int:
@@ -161,3 +161,4 @@ async def ask(req: AskRequest):
 
 
 # For local run: uvicorn backend.main:app --reload --port 8000
+
